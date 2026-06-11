@@ -1,5 +1,5 @@
-const GEMINI_MODEL = 'gemini-2.0-flash';
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const SYSTEM_PROMPT = `당신은 재미로 로또 번호를 추천하는 한국어 운세 챗봇입니다.
 사용자의 생년월일과 오늘 날짜를 바탕으로 띠, 별자리, 숫자 기운을 해석하고 로또 6/45 번호를 추천합니다.
@@ -13,23 +13,36 @@ const SYSTEM_PROMPT = `당신은 재미로 로또 번호를 추천하는 한국�
 - 실제 당첨을 보장한다는 표현은 사용하지 않음`;
 
 const RESPONSE_SCHEMA = {
-  type: 'object',
+  type: 'OBJECT',
   properties: {
-    fortune: { type: 'string' },
+    fortune: { type: 'STRING' },
     numbers: {
-      type: 'array',
-      items: { type: 'integer' },
+      type: 'ARRAY',
+      items: { type: 'INTEGER' },
     },
-    bonus: { type: 'integer' },
-    explanation: { type: 'string' },
+    bonus: { type: 'INTEGER' },
+    explanation: { type: 'STRING' },
   },
   required: ['fortune', 'numbers', 'bonus', 'explanation'],
+  propertyOrdering: ['fortune', 'numbers', 'bonus', 'explanation'],
 };
 
 function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+function parseRequestBody(body) {
+  if (!body) return {};
+  if (typeof body === 'string') {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body;
 }
 
 function getTodayKorean() {
@@ -75,50 +88,141 @@ function isValidLottoResult(result) {
 }
 
 function buildUserPrompt(birthDate) {
-  return `생년월일: ${birthDate}
+  return `${SYSTEM_PROMPT}
+
+생년월일: ${birthDate}
 오늘 날짜: ${getTodayKorean()}
 
 위 정보를 바탕으로 오늘의 운세를 해석하고, 로또 6/45 번호 6개와 보너스 번호 1개를 추천해 주세요.
-추천 이유를 운세와 연결지어 설명해 주세요.`;
+추천 이유를 운세와 연결지어 설명해 주세요.
+
+반드시 아래 JSON 형식으로만 응답하세요:
+{
+  "fortune": "오늘의 운세",
+  "numbers": [1, 2, 3, 4, 5, 6],
+  "bonus": 7,
+  "explanation": "추천 이유"
+}`;
 }
 
-async function callGemini(apiKey, birthDate) {
-  const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+function normalizeLottoResult(raw) {
+  const numbers = raw.numbers.map((num) => Number(num)).sort((a, b) => a - b);
+  const bonus = Number(raw.bonus);
+
+  return {
+    fortune: String(raw.fortune).trim(),
+    numbers,
+    bonus,
+    explanation: String(raw.explanation).trim(),
+  };
+}
+
+function extractJsonText(text) {
+  const trimmed = text.trim();
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const match = trimmed.match(/\{[\s\S]*\}/);
+    if (!match) {
+      throw new Error('JSON not found in Gemini response');
+    }
+    return JSON.parse(match[0]);
+  }
+}
+
+async function requestGemini(apiKey, model, payload) {
+  const response = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: SYSTEM_PROMPT }],
-      },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: buildUserPrompt(birthDate) }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.9,
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-      },
-    }),
+    body: JSON.stringify(payload),
   });
 
+  const responseText = await response.text();
+
   if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${errorBody}`);
+    throw new Error(`Gemini API error (${model}): ${response.status} ${responseText}`);
   }
 
-  const data = await response.json();
+  const data = JSON.parse(responseText);
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!text) {
-    throw new Error('Gemini API returned empty response');
+    const blockReason = data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason;
+    throw new Error(`Gemini API empty response (${model}): ${blockReason || 'unknown'}`);
   }
 
-  const parsed = JSON.parse(text);
-  parsed.numbers = [...parsed.numbers].sort((a, b) => a - b);
-  return parsed;
+  return extractJsonText(text);
+}
+
+async function callGeminiWithSchema(apiKey, birthDate) {
+  const payload = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: buildUserPrompt(birthDate) }],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.9,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json',
+      responseSchema: RESPONSE_SCHEMA,
+    },
+  };
+
+  let lastError;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const parsed = await requestGemini(apiKey, model, payload);
+      return normalizeLottoResult(parsed);
+    } catch (error) {
+      lastError = error;
+      console.error(`Structured Gemini call failed (${model}):`, error.message);
+    }
+  }
+
+  throw lastError || new Error('All structured Gemini models failed');
+}
+
+async function callGeminiPlainJson(apiKey, birthDate) {
+  const payload = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: buildUserPrompt(birthDate) }],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.9,
+      maxOutputTokens: 1024,
+      responseMimeType: 'application/json',
+    },
+  };
+
+  let lastError;
+
+  for (const model of GEMINI_MODELS) {
+    try {
+      const parsed = await requestGemini(apiKey, model, payload);
+      return normalizeLottoResult(parsed);
+    } catch (error) {
+      lastError = error;
+      console.error(`Plain JSON Gemini call failed (${model}):`, error.message);
+    }
+  }
+
+  throw lastError || new Error('All plain JSON Gemini models failed');
+}
+
+async function callGemini(apiKey, birthDate) {
+  try {
+    return await callGeminiWithSchema(apiKey, birthDate);
+  } catch (schemaError) {
+    console.error('Falling back to plain JSON mode:', schemaError.message);
+    return callGeminiPlainJson(apiKey, birthDate);
+  }
 }
 
 module.exports = async (req, res) => {
@@ -137,7 +241,7 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'GEMINI_API_KEY 환경변수가 설정되지 않았습니다.' });
   }
 
-  const { birthDate } = req.body ?? {};
+  const { birthDate } = parseRequestBody(req.body);
 
   if (!isValidBirthDate(birthDate)) {
     return res.status(400).json({ error: '올바른 생년월일(YYYY-MM-DD)을 입력해 주세요.' });
