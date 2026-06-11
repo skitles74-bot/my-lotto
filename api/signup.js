@@ -33,15 +33,31 @@ function cleanEnv(value) {
   return (value || '').trim().replace(/^['"]|['"]$/g, '');
 }
 
+function normalizeSupabaseUrl(url) {
+  let cleaned = cleanEnv(url);
+  cleaned = cleaned.replace(/\/+$/, '');
+  cleaned = cleaned.replace(/\/rest\/v1.*$/i, '');
+  return cleaned;
+}
+
+function isPlausibleSupabaseUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && parsed.hostname.includes('supabase');
+  } catch {
+    return false;
+  }
+}
+
 function getSupabaseConfig() {
-  const url = cleanEnv(process.env.SUPABASE_URL);
+  const url = normalizeSupabaseUrl(process.env.SUPABASE_URL);
   const key = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
   if (!url || !key) {
     throw new Error('SUPABASE_NOT_CONFIGURED');
   }
 
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
+  if (!isPlausibleSupabaseUrl(url)) {
     throw new Error('INVALID_SUPABASE_URL');
   }
 
@@ -170,7 +186,7 @@ module.exports = async (req, res) => {
 
     const errorMap = {
       SUPABASE_NOT_CONFIGURED: 'Supabase 환경변수(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)가 설정되지 않았습니다.',
-      INVALID_SUPABASE_URL: 'SUPABASE_URL 형식이 올바르지 않습니다. https://xxxxx.supabase.co 형식인지 확인해 주세요.',
+      INVALID_SUPABASE_URL: 'SUPABASE_URL 형식이 올바르지 않습니다. Supabase Settings → API의 Project URL(https://xxxxx.supabase.co)을 입력해 주세요.',
       AUTH_FAILED: 'Supabase API 키가 올바르지 않습니다. Service Role Key(service_role secret)를 확인해 주세요.',
       TABLE_NOT_FOUND: 'Vercel에 설정한 SUPABASE_URL 프로젝트에서 public.signups 테이블을 찾을 수 없습니다. Supabase Settings → API의 Project URL과 Vercel 환경변수 URL이 같은 프로젝트인지, Settings → Data API → Exposed schemas에 public이 포함되어 있는지 확인해 주세요.',
       PERMISSION_DENIED: 'Supabase 저장 권한이 없습니다. SQL Editor에서 fix-permissions.sql을 실행해 주세요.',
