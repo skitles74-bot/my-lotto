@@ -647,6 +647,19 @@ body {
   color: #dc2626;
 }
 
+.chat-error-meta {
+  color: #b45309;
+  font-size: 0.82rem;
+  margin-top: 0.35rem;
+}
+
+.chat-error-detail {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  word-break: break-word;
+}
+
 .chat-loading {
   color: var(--text-muted);
 }

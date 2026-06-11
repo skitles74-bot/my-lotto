@@ -78,11 +78,30 @@ function appendBotMessage(contentNode) {
   scrollChatToBottom();
 }
 
-function appendBotError(text) {
-  const error = document.createElement('p');
-  error.className = 'chat-text chat-error';
-  error.textContent = text;
-  appendBotMessage(error);
+function appendBotError(text, meta = {}) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'chat-error-wrap';
+
+  const main = document.createElement('p');
+  main.className = 'chat-text chat-error';
+  main.textContent = text;
+  wrapper.appendChild(main);
+
+  if (meta.code) {
+    const codeEl = document.createElement('p');
+    codeEl.className = 'chat-text chat-error-meta';
+    codeEl.textContent = `오류 코드: ${meta.code}`;
+    wrapper.appendChild(codeEl);
+  }
+
+  if (meta.detail) {
+    const detailEl = document.createElement('p');
+    detailEl.className = 'chat-text chat-error-detail';
+    detailEl.textContent = `상세: ${meta.detail}`;
+    wrapper.appendChild(detailEl);
+  }
+
+  appendBotMessage(wrapper);
 }
 
 function appendLoadingMessage() {
@@ -125,7 +144,11 @@ async function requestRecommendation(birthDate) {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.error || '번호 추천에 실패했습니다.');
+    throw {
+      message: data.error || '번호 추천에 실패했습니다.',
+      code: data.code,
+      detail: data.detail,
+    };
   }
 
   return data;
@@ -152,7 +175,10 @@ chatForm.addEventListener('submit', async (event) => {
     scheduleSignupModal();
   } catch (error) {
     removeLoadingMessage(loadingMessage);
-    appendBotError(error.message);
+    appendBotError(error.message || '번호 추천에 실패했습니다.', {
+      code: error.code,
+      detail: error.detail,
+    });
   } finally {
     setChatLoading(false);
   }

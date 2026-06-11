@@ -216,6 +216,91 @@ async function callGeminiPlainJson(apiKey, birthDate) {
   throw lastError || new Error('All plain JSON Gemini models failed');
 }
 
+function parseGeminiErrorBody(message) {
+  const jsonMatch = message.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return message;
+
+  try {
+    const parsed = JSON.parse(jsonMatch[0]);
+    return parsed.error?.message || parsed.message || message;
+  } catch {
+    return message;
+  }
+}
+
+function extractHttpStatus(message) {
+  const match = message.match(/Gemini API error \([^)]+\): (\d{3})/);
+  return match ? Number(match[1]) : null;
+}
+
+function toUserFacingError(error) {
+  const raw = error?.message || String(error);
+  const detail = parseGeminiErrorBody(raw);
+  const status = extractHttpStatus(raw);
+
+  if (status === 401 || /API key not valid|API_KEY_INVALID/i.test(detail)) {
+    return {
+      error: 'Gemini API 키가 올바르지 않습니다. Google AI Studio에서 API 키를 확인해 주세요.',
+      code: 'INVALID_API_KEY',
+      detail,
+    };
+  }
+
+  if (status === 429 || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(detail)) {
+    return {
+      error: 'Gemini API 사용 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.',
+      code: 'QUOTA_EXCEEDED',
+      detail,
+    };
+  }
+
+  if (status === 403 || /PERMISSION_DENIED|permission/i.test(detail)) {
+    return {
+      error: 'Gemini API 접근 권한이 없습니다. API 키 권한을 확인해 주세요.',
+      code: 'PERMISSION_DENIED',
+      detail,
+    };
+  }
+
+  if (status === 404 || /not found|NOT_FOUND/i.test(detail)) {
+    return {
+      error: 'Gemini 모델을 찾을 수 없습니다. API 설정을 확인해 주세요.',
+      code: 'MODEL_NOT_FOUND',
+      detail,
+    };
+  }
+
+  if (status === 503 || /UNAVAILABLE|overloaded/i.test(detail)) {
+    return {
+      error: 'Gemini API 서버가 일시적으로 사용 불가합니다. 잠시 후 다시 시도해 주세요.',
+      code: 'SERVICE_UNAVAILABLE',
+      detail,
+    };
+  }
+
+  if (/JSON not found|empty response|SAFETY|blocked/i.test(raw + detail)) {
+    return {
+      error: 'AI 응답을 처리하지 못했습니다. 입력 내용을 바꿔 다시 시도해 주세요.',
+      code: 'INVALID_RESPONSE',
+      detail,
+    };
+  }
+
+  if (/All structured Gemini models failed|All plain JSON Gemini models failed/i.test(raw)) {
+    return {
+      error: '모든 Gemini 모델 호출에 실패했습니다.',
+      code: 'ALL_MODELS_FAILED',
+      detail,
+    };
+  }
+
+  return {
+    error: '번호 추천 중 오류가 발생했습니다.',
+    code: 'UNKNOWN',
+    detail: detail.slice(0, 400),
+  };
+}
+
 async function callGemini(apiKey, birthDate) {
   try {
     return await callGeminiWithSchema(apiKey, birthDate);
@@ -251,12 +336,17 @@ module.exports = async (req, res) => {
     const result = await callGemini(apiKey, birthDate);
 
     if (!isValidLottoResult(result)) {
-      return res.status(502).json({ error: '추천 번호 형식이 올바르지 않습니다. 다시 시도해 주세요.' });
+      return res.status(502).json({
+        error: '추천 번호 형식이 올바르지 않습니다. 다시 시도해 주세요.',
+        code: 'INVALID_LOTTO_FORMAT',
+        detail: `numbers: ${JSON.stringify(result.numbers)}, bonus: ${result.bonus}`,
+      });
     }
 
     return res.status(200).json(result);
   } catch (error) {
     console.error('Chat API error:', error);
-    return res.status(500).json({ error: '번호 추천 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
+    const userError = toUserFacingError(error);
+    return res.status(500).json(userError);
   }
 };
