@@ -43,11 +43,21 @@ function getTodayKorean() {
 }
 
 function isValidBirthDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00+09:00`);
-  if (Number.isNaN(date.getTime())) return false;
-  const [y, m, d] = value.split('-').map(Number);
-  return date.getFullYear() === y && date.getMonth() + 1 === m && date.getDate() === d;
+  if (typeof value !== 'string') return false;
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (year < 1900 || year > 2100) return false;
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() + 1 === month
+    && date.getUTCDate() === day;
 }
 
 function isValidLottoResult(result) {
