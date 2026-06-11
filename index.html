@@ -28,6 +28,29 @@
 
       <section id="results" class="results" aria-live="polite"></section>
 
+      <section class="chatbot-section">
+        <div class="chatbot-header">
+          <h2>🔮 운세 로또 챗봇</h2>
+          <p class="chatbot-desc">생년월일과 오늘의 운세를 바탕으로 번호를 추천합니다</p>
+        </div>
+
+        <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+
+        <form id="chatForm" class="chat-form">
+          <label for="birthDate" class="chat-form-label">생년월일</label>
+          <div class="chat-form-row">
+            <input
+              type="date"
+              id="birthDate"
+              class="chat-date-input"
+              required
+              aria-label="생년월일"
+            >
+            <button type="submit" id="chatSubmitBtn" class="chat-submit-btn">번호 추천받기</button>
+          </div>
+        </form>
+      </section>
+
       <section class="winners-section">
         <div class="winners-header">
           <h2>역대 1등 당첨 번호</h2>
@@ -71,12 +94,13 @@
     </main>
 
     <footer class="footer">
-      <p>※ 실제 당첨을 보장하지 않습니다. 재미로만 사용하세요.</p>
+      <p>※ 실제 당첨을 보장하지 않습니다. 챗봇 추천은 재미와 참고용입니다.</p>
     </footer>
   </div>
 
   <script src="lotto-ui.js"></script>
   <script src="app.js"></script>
+  <script src="chatbot.js"></script>
   <script src="winners.js"></script>
 </body>
 </html>
