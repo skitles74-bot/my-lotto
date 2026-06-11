@@ -172,7 +172,7 @@ chatForm.addEventListener('submit', async (event) => {
     const result = await requestRecommendation(birthDate);
     removeLoadingMessage(loadingMessage);
     appendBotMessage(createRecommendationContent(result));
-    window.scheduleSignupModal?.(1500, { source: 'chatbot' });
+    window.scheduleSignupModal?.(1500);
   } catch (error) {
     removeLoadingMessage(loadingMessage);
     appendBotError(error.message || '번호 추천에 실패했습니다.', {

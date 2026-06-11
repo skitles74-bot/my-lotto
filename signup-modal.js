@@ -1,5 +1,4 @@
 const SIGNUP_API_URL = '/api/signup';
-const SIGNUP_DONE_KEY = 'lotto-signup-done';
 
 const signupModal = document.getElementById('signupModal');
 const signupForm = document.getElementById('signupForm');
@@ -10,29 +9,7 @@ const signupErrorEl = document.getElementById('signupError');
 const signupSubmitBtn = document.getElementById('signupSubmitBtn');
 const signupSuccessEl = document.getElementById('signupSuccess');
 
-const SIGNUP_DISMISSED_KEY = 'lotto-signup-dismissed-session';
-
-function isSignupDismissed() {
-  return sessionStorage.getItem(SIGNUP_DISMISSED_KEY) === 'true';
-}
-
-function dismissSignupForSession() {
-  sessionStorage.setItem(SIGNUP_DISMISSED_KEY, 'true');
-}
-
-function clearSignupDismissed() {
-  sessionStorage.removeItem(SIGNUP_DISMISSED_KEY);
-}
-
 let lastFocusedElement = null;
-
-function isSignupDone() {
-  return localStorage.getItem(SIGNUP_DONE_KEY) === 'true';
-}
-
-function markSignupDone() {
-  localStorage.setItem(SIGNUP_DONE_KEY, 'true');
-}
 
 function formatPhoneInput(value) {
   const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -55,12 +32,7 @@ function setSignupLoading(isLoading) {
   signupSubmitBtn.textContent = isLoading ? '가입 처리 중...' : '무료 가입하기';
 }
 
-function openSignupModal(options = {}) {
-  const { source = 'draw' } = options;
-
-  if (isSignupDone()) return;
-  if (source === 'draw' && isSignupDismissed()) return;
-
+function openSignupModal() {
   lastFocusedElement = document.activeElement;
   signupModal.hidden = false;
   document.body.classList.add('modal-open');
@@ -75,7 +47,6 @@ function openSignupModal(options = {}) {
 }
 
 function closeSignupModal() {
-  dismissSignupForSession();
   signupModal.hidden = true;
   document.body.classList.remove('modal-open');
   lastFocusedElement?.focus();
@@ -108,21 +79,8 @@ async function submitSignup(formData) {
   return data;
 }
 
-function scheduleSignupModal(delayMs = 1200, options = {}) {
-  const source = options.source || 'draw';
-
-  if (isSignupDone()) return;
-
-  if (source === 'chatbot') {
-    clearSignupDismissed();
-  } else if (isSignupDismissed()) {
-    return;
-  }
-
-  window.setTimeout(() => {
-    if (isSignupDone()) return;
-    openSignupModal({ source });
-  }, delayMs);
+function scheduleSignupModal(delayMs = 1200) {
+  window.setTimeout(openSignupModal, delayMs);
 }
 
 signupForm.addEventListener('submit', async (event) => {
@@ -134,7 +92,6 @@ signupForm.addEventListener('submit', async (event) => {
 
   try {
     const result = await submitSignup(formData);
-    markSignupDone();
     showSignupSuccess(result.message);
   } catch (error) {
     showSignupError(error.message);
