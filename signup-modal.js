@@ -10,6 +10,20 @@ const signupErrorEl = document.getElementById('signupError');
 const signupSubmitBtn = document.getElementById('signupSubmitBtn');
 const signupSuccessEl = document.getElementById('signupSuccess');
 
+const SIGNUP_DISMISSED_KEY = 'lotto-signup-dismissed-session';
+
+function isSignupDismissed() {
+  return sessionStorage.getItem(SIGNUP_DISMISSED_KEY) === 'true';
+}
+
+function dismissSignupForSession() {
+  sessionStorage.setItem(SIGNUP_DISMISSED_KEY, 'true');
+}
+
+function clearSignupDismissed() {
+  sessionStorage.removeItem(SIGNUP_DISMISSED_KEY);
+}
+
 let lastFocusedElement = null;
 
 function isSignupDone() {
@@ -41,8 +55,11 @@ function setSignupLoading(isLoading) {
   signupSubmitBtn.textContent = isLoading ? '가입 처리 중...' : '무료 가입하기';
 }
 
-function openSignupModal() {
+function openSignupModal(options = {}) {
+  const { source = 'draw' } = options;
+
   if (isSignupDone()) return;
+  if (source === 'draw' && isSignupDismissed()) return;
 
   lastFocusedElement = document.activeElement;
   signupModal.hidden = false;
@@ -58,6 +75,7 @@ function openSignupModal() {
 }
 
 function closeSignupModal() {
+  dismissSignupForSession();
   signupModal.hidden = true;
   document.body.classList.remove('modal-open');
   lastFocusedElement?.focus();
@@ -90,11 +108,20 @@ async function submitSignup(formData) {
   return data;
 }
 
-function scheduleSignupModal(delayMs = 1200) {
+function scheduleSignupModal(delayMs = 1200, options = {}) {
+  const source = options.source || 'draw';
+
   if (isSignupDone()) return;
 
+  if (source === 'chatbot') {
+    clearSignupDismissed();
+  } else if (isSignupDismissed()) {
+    return;
+  }
+
   window.setTimeout(() => {
-    openSignupModal();
+    if (isSignupDone()) return;
+    openSignupModal({ source });
   }, delayMs);
 }
 

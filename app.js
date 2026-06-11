@@ -152,7 +152,7 @@ async function draw() {
 
   addToHistory(allLines);
   drawBtn.disabled = false;
-  window.scheduleSignupModal?.();
+  window.scheduleSignupModal?.(1200, { source: 'draw' });
 }
 
 function updateLineCount(delta) {
