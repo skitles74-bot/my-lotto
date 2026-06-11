@@ -27,8 +27,56 @@ function parseRequestBody(body) {
   return body;
 }
 
+function normalizeSupabaseUrl(url) {
+  return url.trim().replace(/\/+$/, '');
+}
+
+function classifySupabaseError(status, errorText) {
+  let payload = {};
+
+  try {
+    payload = JSON.parse(errorText);
+  } catch {
+    payload = { message: errorText };
+  }
+
+  const code = payload.code || '';
+  const message = payload.message || errorText || '';
+
+  if (status === 401 || message.includes('Invalid API key') || message.includes('JWT')) {
+    return 'AUTH_FAILED';
+  }
+
+  if (
+    status === 404
+    || code === 'PGRST205'
+    || message.includes('Could not find the table')
+    || message.includes('relation "public.signups" does not exist')
+  ) {
+    return 'TABLE_NOT_FOUND';
+  }
+
+  if (
+    status === 403
+    || code === '42501'
+    || message.includes('permission denied')
+  ) {
+    return 'PERMISSION_DENIED';
+  }
+
+  if (
+    status === 409
+    || code === '23505'
+    || message.includes('duplicate key')
+  ) {
+    return 'DUPLICATE_SIGNUP';
+  }
+
+  return 'UNKNOWN';
+}
+
 async function saveSignupToSupabase(signup) {
-  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
@@ -39,6 +87,7 @@ async function saveSignupToSupabase(signup) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'application/json',
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
       Prefer: 'return=minimal',
@@ -55,12 +104,9 @@ async function saveSignupToSupabase(signup) {
   }
 
   const errorText = await response.text();
-
-  if (response.status === 409 || errorText.includes('duplicate key')) {
-    throw new Error('DUPLICATE_SIGNUP');
-  }
-
-  throw new Error(`Supabase insert failed: ${response.status} ${errorText}`);
+  const errorType = classifySupabaseError(response.status, errorText);
+  console.error('Supabase insert error:', response.status, errorText);
+  throw new Error(errorType);
 }
 
 module.exports = async (req, res) => {
@@ -105,14 +151,19 @@ module.exports = async (req, res) => {
   } catch (error) {
     console.error('Signup API error:', error);
 
-    if (error.message === 'SUPABASE_NOT_CONFIGURED') {
-      return res.status(500).json({ error: 'Supabase 환경변수가 설정되지 않았습니다.' });
-    }
+    const errorMap = {
+      SUPABASE_NOT_CONFIGURED: 'Supabase 환경변수(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)가 설정되지 않았습니다.',
+      AUTH_FAILED: 'Supabase API 키가 올바르지 않습니다. Service Role Key를 확인해 주세요.',
+      TABLE_NOT_FOUND: 'signups 테이블이 없습니다. Supabase SQL Editor에서 schema.sql을 실행해 주세요.',
+      PERMISSION_DENIED: 'Supabase 저장 권한이 없습니다. fix-permissions.sql을 실행해 주세요.',
+      DUPLICATE_SIGNUP: '이미 가입된 이메일 또는 전화번호입니다.',
+    };
 
-    if (error.message === 'DUPLICATE_SIGNUP') {
-      return res.status(409).json({ error: '이미 가입된 이메일 또는 전화번호입니다.' });
-    }
+    const message = errorMap[error.message]
+      || '가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
 
-    return res.status(500).json({ error: '가입 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
+    const status = error.message === 'DUPLICATE_SIGNUP' ? 409 : 500;
+
+    return res.status(status).json({ error: message });
   }
 };
