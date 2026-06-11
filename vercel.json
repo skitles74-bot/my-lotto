@@ -1,6 +1,13 @@
 {
   "version": 2,
+  "functions": {
+    "backend/api/**/*.js": {
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" }
+    { "source": "/api/chat", "destination": "/backend/api/chat" },
+    { "source": "/api/signup", "destination": "/backend/api/signup" },
+    { "source": "/(.*)", "destination": "/frontend/$1" }
   ]
 }
