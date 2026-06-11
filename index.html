@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로또 추첨기</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>🎱 로또 추첨기</h1>
+      <p class="subtitle">1~45 중 6개 번호와 보너스 번호 1개를 무작위로 추첨합니다</p>
+    </header>
+
+    <main class="main">
+      <section class="controls">
+        <div class="control-group">
+          <label for="lineCount">추첨 줄 수</label>
+          <div class="stepper">
+            <button type="button" id="decreaseLines" aria-label="줄 수 줄이기">−</button>
+            <input type="number" id="lineCount" value="1" min="1" max="10" readonly>
+            <button type="button" id="increaseLines" aria-label="줄 수 늘리기">+</button>
+          </div>
+        </div>
+        <button type="button" id="drawBtn" class="draw-btn">추첨하기</button>
+      </section>
+
+      <section id="results" class="results" aria-live="polite"></section>
+
+      <section class="winners-section">
+        <div class="winners-header">
+          <h2>역대 1등 당첨 번호</h2>
+          <input
+            type="search"
+            id="winnerSearch"
+            class="winner-search"
+            placeholder="회차 검색 (예: 1100)"
+            inputmode="numeric"
+            aria-label="회차 검색"
+          >
+        </div>
+
+        <div class="number-filter">
+          <label for="numberFilter" class="number-filter-label">번호 포함 검색</label>
+          <input
+            type="text"
+            id="numberFilter"
+            class="number-filter-input"
+            placeholder="예: 7, 14, 23 또는 7 14 23"
+            aria-describedby="numberFilterHint"
+          >
+          <p id="numberFilterHint" class="number-filter-hint">
+            입력한 번호가 모두 포함된 1등 당첨 회차를 보여줍니다. (1~45, 최대 6개)
+          </p>
+          <p id="numberFilterStatus" class="number-filter-status" hidden></p>
+        </div>
+
+        <p id="winnersMeta" class="winners-meta">데이터 불러오는 중...</p>
+        <ul id="winnersList" class="winners-list"></ul>
+        <button type="button" id="loadMoreWinners" class="load-more-btn" hidden>더 보기</button>
+      </section>
+
+      <section class="history-section">
+        <div class="history-header">
+          <h2>추첨 기록</h2>
+          <button type="button" id="clearHistory" class="text-btn">기록 삭제</button>
+        </div>
+        <ul id="history" class="history"></ul>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>※ 실제 당첨을 보장하지 않습니다. 재미로만 사용하세요.</p>
+    </footer>
+  </div>
+
+  <script src="lotto-ui.js"></script>
+  <script src="app.js"></script>
+  <script src="winners.js"></script>
+</body>
+</html>
