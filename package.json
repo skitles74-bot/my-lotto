@@ -2,5 +2,8 @@
   "name": "my-lotto",
   "private": true,
   "version": "1.0.0",
-  "description": "웹 로또 추첨기 with Gemini chatbot"
+  "description": "웹 로또 추첨기 with Gemini chatbot",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8"
+  }
 }

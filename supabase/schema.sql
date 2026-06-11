@@ -1,4 +1,5 @@
 -- Supabase SQL Editor에서 실행하세요.
+-- 테이블 이름: public.signups (복수형)
 
 create table if not exists public.signups (
   id uuid primary key default gen_random_uuid(),

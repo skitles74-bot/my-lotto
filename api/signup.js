@@ -1,3 +1,5 @@
+const { createClient } = require('@supabase/supabase-js');
+
 function normalizePhone(value) {
   return value.replace(/\D/g, '');
 }
@@ -27,86 +29,101 @@ function parseRequestBody(body) {
   return body;
 }
 
-function normalizeSupabaseUrl(url) {
-  return url.trim().replace(/\/+$/, '');
+function cleanEnv(value) {
+  return (value || '').trim().replace(/^['"]|['"]$/g, '');
 }
 
-function classifySupabaseError(status, errorText) {
-  let payload = {};
+function getSupabaseConfig() {
+  const url = cleanEnv(process.env.SUPABASE_URL);
+  const key = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-  try {
-    payload = JSON.parse(errorText);
-  } catch {
-    payload = { message: errorText };
-  }
-
-  const code = payload.code || '';
-  const message = payload.message || errorText || '';
-
-  if (status === 401 || message.includes('Invalid API key') || message.includes('JWT')) {
-    return 'AUTH_FAILED';
-  }
-
-  if (
-    status === 404
-    || code === 'PGRST205'
-    || message.includes('Could not find the table')
-    || message.includes('relation "public.signups" does not exist')
-  ) {
-    return 'TABLE_NOT_FOUND';
-  }
-
-  if (
-    status === 403
-    || code === '42501'
-    || message.includes('permission denied')
-  ) {
-    return 'PERMISSION_DENIED';
-  }
-
-  if (
-    status === 409
-    || code === '23505'
-    || message.includes('duplicate key')
-  ) {
-    return 'DUPLICATE_SIGNUP';
-  }
-
-  return 'UNKNOWN';
-}
-
-async function saveSignupToSupabase(signup) {
-  const supabaseUrl = normalizeSupabaseUrl(process.env.SUPABASE_URL || '');
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
+  if (!url || !key) {
     throw new Error('SUPABASE_NOT_CONFIGURED');
   }
 
-  const response = await fetch(`${supabaseUrl}/rest/v1/signups`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify({
-      name: signup.name,
-      phone: signup.phone,
-      email: signup.email,
-    }),
-  });
-
-  if (response.ok) {
-    return;
+  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)) {
+    throw new Error('INVALID_SUPABASE_URL');
   }
 
-  const errorText = await response.text();
-  const errorType = classifySupabaseError(response.status, errorText);
-  console.error('Supabase insert error:', response.status, errorText);
-  throw new Error(errorType);
+  return { url, key };
+}
+
+function getSupabaseClient() {
+  const { url, key } = getSupabaseConfig();
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    db: {
+      schema: 'public',
+    },
+  });
+}
+
+function mapSupabaseError(error) {
+  const code = error.code || '';
+  const message = error.message || '';
+  const details = error.details || '';
+
+  console.error('Supabase error:', { code, message, details, hint: error.hint });
+
+  if (
+    code === 'PGRST205'
+    || message.includes('Could not find the table')
+    || message.includes('relation "public.signups" does not exist')
+  ) {
+    return new Error('TABLE_NOT_FOUND');
+  }
+
+  if (
+    code === 'PGRST301'
+    || message.includes('Invalid API key')
+    || message.includes('JWT')
+  ) {
+    return new Error('AUTH_FAILED');
+  }
+
+  if (
+    code === '42501'
+    || message.includes('permission denied')
+  ) {
+    return new Error('PERMISSION_DENIED');
+  }
+
+  if (
+    code === '23505'
+    || message.includes('duplicate key')
+  ) {
+    return new Error('DUPLICATE_SIGNUP');
+  }
+
+  return new Error('UNKNOWN');
+}
+
+async function saveSignupToSupabase(signup) {
+  const { url } = getSupabaseConfig();
+  const supabase = getSupabaseClient();
+
+  const { error: probeError } = await supabase
+    .from('signups')
+    .select('id', { count: 'exact', head: true });
+
+  if (probeError) {
+    console.error('Supabase probe error:', probeError, 'project:', url);
+    throw mapSupabaseError(probeError);
+  }
+
+  const { error } = await supabase.from('signups').insert({
+    name: signup.name,
+    phone: signup.phone,
+    email: signup.email,
+  });
+
+  if (error) {
+    throw mapSupabaseError(error);
+  }
 }
 
 module.exports = async (req, res) => {
@@ -153,9 +170,10 @@ module.exports = async (req, res) => {
 
     const errorMap = {
       SUPABASE_NOT_CONFIGURED: 'Supabase 환경변수(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)가 설정되지 않았습니다.',
-      AUTH_FAILED: 'Supabase API 키가 올바르지 않습니다. Service Role Key를 확인해 주세요.',
-      TABLE_NOT_FOUND: 'signups 테이블이 없습니다. Supabase SQL Editor에서 schema.sql을 실행해 주세요.',
-      PERMISSION_DENIED: 'Supabase 저장 권한이 없습니다. fix-permissions.sql을 실행해 주세요.',
+      INVALID_SUPABASE_URL: 'SUPABASE_URL 형식이 올바르지 않습니다. https://xxxxx.supabase.co 형식인지 확인해 주세요.',
+      AUTH_FAILED: 'Supabase API 키가 올바르지 않습니다. Service Role Key(service_role secret)를 확인해 주세요.',
+      TABLE_NOT_FOUND: 'Vercel에 설정한 SUPABASE_URL 프로젝트에서 public.signups 테이블을 찾을 수 없습니다. Supabase Settings → API의 Project URL과 Vercel 환경변수 URL이 같은 프로젝트인지, Settings → Data API → Exposed schemas에 public이 포함되어 있는지 확인해 주세요.',
+      PERMISSION_DENIED: 'Supabase 저장 권한이 없습니다. SQL Editor에서 fix-permissions.sql을 실행해 주세요.',
       DUPLICATE_SIGNUP: '이미 가입된 이메일 또는 전화번호입니다.',
     };
 
