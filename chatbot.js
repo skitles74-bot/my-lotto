@@ -149,6 +149,7 @@ chatForm.addEventListener('submit', async (event) => {
     const result = await requestRecommendation(birthDate);
     removeLoadingMessage(loadingMessage);
     appendBotMessage(createRecommendationContent(result));
+    scheduleSignupModal();
   } catch (error) {
     removeLoadingMessage(loadingMessage);
     appendBotError(error.message);

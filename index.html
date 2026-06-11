@@ -98,8 +98,50 @@
     </footer>
   </div>
 
+  <div id="signupModal" class="signup-modal" hidden role="dialog" aria-modal="true" aria-labelledby="signupModalTitle">
+    <div id="signupBackdrop" class="signup-backdrop"></div>
+    <div class="signup-panel">
+      <button type="button" id="signupCloseBtn" class="signup-close-btn" aria-label="닫기">×</button>
+
+      <div class="signup-badge">AI 추천 서비스</div>
+      <h2 id="signupModalTitle" class="signup-title">앞으로 AI가 로또 번호를 추천해 드립니다</h2>
+      <p class="signup-desc">
+        생년월일과 오늘의 운세를 분석해 맞춤형 로또 번호를 추천하는 서비스입니다.
+        지금 가입하고 매주 AI 번호 추천을 받아보세요.
+      </p>
+
+      <form id="signupForm" class="signup-form">
+        <div class="signup-field">
+          <label for="signupName">이름</label>
+          <input type="text" id="signupName" name="name" placeholder="홍길동" required autocomplete="name">
+        </div>
+
+        <div class="signup-field">
+          <label for="signupPhone">전화번호</label>
+          <input type="tel" id="signupPhone" name="phone" placeholder="010-1234-5678" required autocomplete="tel">
+        </div>
+
+        <div class="signup-field">
+          <label for="signupEmail">이메일</label>
+          <input type="email" id="signupEmail" name="email" placeholder="example@email.com" required autocomplete="email">
+        </div>
+
+        <p id="signupError" class="signup-error" hidden></p>
+
+        <button type="submit" id="signupSubmitBtn" class="signup-submit-btn">무료 가입하기</button>
+        <button type="button" id="signupSkipBtn" class="signup-skip-btn">다음에 할게요</button>
+      </form>
+
+      <div id="signupSuccess" class="signup-success" hidden>
+        <p class="signup-success-text"></p>
+        <button type="button" id="signupSuccessCloseBtn" class="signup-submit-btn">확인</button>
+      </div>
+    </div>
+  </div>
+
   <script src="lotto-ui.js"></script>
   <script src="app.js"></script>
+  <script src="signup-modal.js"></script>
   <script src="chatbot.js"></script>
   <script src="winners.js"></script>
 </body>
