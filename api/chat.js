@@ -1,4 +1,4 @@
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const SYSTEM_PROMPT = `당신은 재미로 로또 번호를 추천하는 한국어 운세 챗봇입니다.
@@ -171,19 +171,19 @@ async function callGeminiWithSchema(apiKey, birthDate) {
     },
   };
 
-  let lastError;
+  const errors = [];
 
   for (const model of GEMINI_MODELS) {
     try {
       const parsed = await requestGemini(apiKey, model, payload);
       return normalizeLottoResult(parsed);
     } catch (error) {
-      lastError = error;
+      errors.push(`${model}: ${error.message}`);
       console.error(`Structured Gemini call failed (${model}):`, error.message);
     }
   }
 
-  throw lastError || new Error('All structured Gemini models failed');
+  throw new Error(errors.join(' | ') || 'All structured Gemini models failed');
 }
 
 async function callGeminiPlainJson(apiKey, birthDate) {
@@ -201,19 +201,19 @@ async function callGeminiPlainJson(apiKey, birthDate) {
     },
   };
 
-  let lastError;
+  const errors = [];
 
   for (const model of GEMINI_MODELS) {
     try {
       const parsed = await requestGemini(apiKey, model, payload);
       return normalizeLottoResult(parsed);
     } catch (error) {
-      lastError = error;
+      errors.push(`${model}: ${error.message}`);
       console.error(`Plain JSON Gemini call failed (${model}):`, error.message);
     }
   }
 
-  throw lastError || new Error('All plain JSON Gemini models failed');
+  throw new Error(errors.join(' | ') || 'All plain JSON Gemini models failed');
 }
 
 function parseGeminiErrorBody(message) {
@@ -258,6 +258,14 @@ function toUserFacingError(error) {
     return {
       error: 'Gemini API 접근 권한이 없습니다. API 키 권한을 확인해 주세요.',
       code: 'PERMISSION_DENIED',
+      detail,
+    };
+  }
+
+  if (/no longer available|deprecated|shutdown/i.test(detail)) {
+    return {
+      error: '사용 중인 Gemini 모델이 더 이상 지원되지 않습니다. 서비스 업데이트 후 다시 시도해 주세요.',
+      code: 'MODEL_DEPRECATED',
       detail,
     };
   }
